@@ -73,3 +73,8 @@ class Demand:
     (self.ID,self.WH,self.Position,self.Item,self.day,self.startTime,self.EndTime
        ,self.failure         ))
     
+def main():
+    pass
+
+if __name__ == '__main__':
+    main()
