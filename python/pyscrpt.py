@@ -137,9 +137,8 @@ class Demand:
 #Energy = W(A + Bs + Ch)
 class Path:
     def __init__(self,p1:Point,p2:Point):
-        
+        pass
             
-
 
 def main():
     global dem_lst
