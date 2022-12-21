@@ -7,8 +7,12 @@ import queue
 
 node_lst = []
 drone_type_instances = []
-successful_drone_type_instances = []
+successful_paths = []
 const_time = 4 * 60 * 60
+
+demand_nodes = {} # for ex D1 : demand node object
+recharge_nodes = []
+warehouse_nodes = []
 
 #precomp
 item_lst = []
@@ -140,25 +144,30 @@ class Path:
     def __str__(self):
         return "Path: {}\nEnergy: {}\nTime: {}".format(self.lst, self.energy, self.time)
 
-def node_path(drone:Drone, node:Node, r_time:float, battery:float, visited:dict = {i : -1 for i in node_lst if type(i) == Warehouse or type(i) == RechargeStation}, dest_visited:int = 0, path_summary:list = [], energy_consumed:float = 0.0):
-    if type(node) == Warehouse:
-        successful_drone_type_instances.append((drone, r_time, visited, dest_visited, path_summary, energy_consumed))
+def node_path(drone:Drone, node:Node, r_time:float, battery:float, node_lst:list, mx_speed:tuple, visited:dict = {i : -1 for i in node_lst if type(i) == Warehouse or type(i) == RechargeStation}, dest_visited:int = 0, path_summary:list = [], energy_consumed:float = 0.0, demand_lst:list = [], most_successful_path:list = []):
+    if type(node) == Warehouse and dest_visited == len(node_lst):
+        if most_successful_path == [] or energy_consumed < most_successful_path[0]:
+            most_successful_path = (energy_consumed, path_summary, demand_lst)
     for i in node_lst:
         if type(i) == Warehouse:
            if visited[i] < dest_visited:
-                t_p = Path(node.position, i.position, drone, )
+                t_p = Path(node.position, i.position, drone, mx_speed)
                 if battery - t_p.get_energy(node.position, i.position) > 0 and r_time + t_p.get_time(node.position, i.position) < const_time:
-                   node_path(drone, i, r_time + t_p.get_time(node.position, i.position), battery - t_p.get_energy(node.position, i.position), visited, dest_visited, path_summary + [t_p])
+                    v_ = visited.copy()
+                    v_[i] = dest_visited
+                    node_path(drone, i, r_time + t_p.get_time(node.position, i.position), battery - t_p.get_energy(node.position, i.position), node_lst, mx_speed,v_, dest_visited, path_summary + [t_p], energy_consumed + t_p.get_energy(node.position, i.position), demand_lst, most_successful_path)
         elif type(i) == RechargeStation:
-            if visited[i] < dest_visited:
-                t_p = Path(node.position, i.position, drone)
+           if visited[i] < dest_visited:
+                t_p = Path(node.position, i.position, drone, mx_speed)
                 if battery - t_p.get_energy(node.position, i.position) > 0 and r_time + t_p.get_time(node.position, i.position) < const_time:
-                   node_path(drone, i, r_time + t_p.get_time(node.position, i.position), battery - t_p.get_energy(node.position, i.position), visited, dest_visited, path_summary + [t_p])
+                    v_ = visited.copy()
+                    v_[i] = dest_visited
+                    node_path(drone, i, r_time + t_p.get_time(node.position, i.position), battery - t_p.get_energy(node.position, i.position), node_lst, mx_speed, v_, dest_visited, path_summary + [t_p], energy_consumed + t_p.get_energy(node.position, i.position), demand_lst, most_successful_path)
         elif type(i) == Demand:
-           if dest_visited + 1 <= drone.slots and i.item.weight + pkg_weight <= drone.weight_capacity and i.item.volume + pkg_vol <= drone.volume_capacity and  r_time + t_p.get_time(node.position, i.position) < i.end_time:
-                t_p = Path(node.position, i.position, drone)
+            if i not in demand_lst:
+                t_p = Path(node.position, i.position, drone, mx_speed)
                 if battery - t_p.get_energy(node.position, i.position) > 0 and r_time + t_p.get_time(node.position, i.position) < const_time:
-                   node_path(drone, i, r_time + t_p.get_time(node.position, i.position), battery - t_p.get_energy(node.position, i.position), visited, dest_visited + 1, path_summary + [t_p], pkg_weight + i.item.weight, pkg_vol + i.item.volume)
+                    node_path(drone, i, r_time + t_p.get_time(node.position, i.position), battery - t_p.get_energy(node.position, i.position), visited, dest_visited + 1, path_summary + [t_p], energy_consumed + t_p.get_energy(node.position, i.position), demand_lst + [i],  most_successful_path)
 
 def carry_lst_generator(r_weight, r_volume, item_lst:list):
     lst = []
@@ -170,10 +179,16 @@ def carry_lst_generator(r_weight, r_volume, item_lst:list):
 def node_search(drone:Drone):
     carry_lst = carry_lst_generator(drone.weight_capacity, drone.volume_capacity, item_lst)
     for i in carry_lst:
-        node_path(drone, global_st, 0, drone.battery_capacity)
+        nodes = [demand_nodes[j.Demand_Id] for j in i] + recharge_nodes + warehouse_nodes
+        wt = [j.weight for j in i]
+        mx_speed = (drone.max_speed - drone.p * max(wt)/sum(wt), drone.max_speed - drone.q * max(wt)/sum(wt))
+        most_successful_path = []
+        node_path(drone, warehouse_nodes[0], 0.0, drone.battery_capacity, nodes, mx_speed, most_successful_path = most_successful_path)
+        if most_successful_path != []:
+            successful_paths.append(most_successful_path)
 
-
-
+def path_planner():
+    global successful_paths
 
 def main():   
     demand = pd.read_csv("Demand.csv")
